@@ -6,14 +6,16 @@ import os
 import time
 import vtk
 import numpy as np
-import pyproj
+from pyproj import Transformer
 
-# Constante
+# Constante file
 VTK_PLANE_GPS = "vtkgps.txt"
 TEXTURE_IMG = "glider_map.jpg"
 VTK_MAP = "EarthEnv-DEM90_N60E010.bil"
 VTK_FILENAME = "plane.vtk"
 
+
+# Constante MAP
 DEGREE = 5
 MIN_LAT = 60
 MIN_LONG = 10
@@ -26,21 +28,20 @@ MAP_WIDTH = 6000
 WINDOW_WIDTH_SIZE = 1000
 WINDOW_HEIGTH_SIZE = 1000
 
-# https://gis.stackexchange.com/questions/78838/converting-projected-coordinates-to-lat-lon-using-python
-RT90 = pyproj.Proj(init='epsg:3857')
-GPS = pyproj.Proj(init='epsg:4326')
 
+RT90 = "epsg:3857"
+GPS = "epsg:4326"
 
+#https://pyproj4.github.io/pyproj/stable/gotchas.html#upgrading-to-pyproj-2-from-pyproj-1
 def convert_rt90_to_gps_coordinate(x, y):
-    longitude, latitude = pyproj.transform(RT90, GPS, x, y)
-    return latitude, longitude
+    transformer = Transformer.from_crs(RT90, GPS)
+    return transformer.transform(x, y)
 
 
 TOP_LEFT = convert_rt90_to_gps_coordinate(1349340, 7022573)
 TOP_RIGHT = convert_rt90_to_gps_coordinate(1371573, 7022967)
 BOTTOM_LEFT = convert_rt90_to_gps_coordinate(1349602, 7005969)
 BOTTOM_RIGHT = convert_rt90_to_gps_coordinate(1371835, 7006362)
-
 
 def writer_vtk(filename, data):
     """
@@ -110,27 +111,92 @@ def coordinate_earth(lat, lng, alt):
 def generate_plane(coordinate):
     return 0
 
+# https://vtk.org/Wiki/VTK/Examples/Cxx/Visualization/TextureMapPlane
+def get_texture():
+    reader = vtk.vtkJPEGReader()
+    reader.SetFileName(TEXTURE_IMG)
+    texture = vtk.vtkTexture()
+    texture.SetInputConnection(reader.GetOutputPort())
+    return texture
 
 def generate_map(sgrid):
     data_map = np.fromfile(VTK_MAP, dtype=np.int16).reshape(MAP_WIDTH, MAP_WIDTH)
 
-    delta = DEGREE / MAP_WIDTH
-
-    
-
+    delta_long = (MAX_LONG - MIN_LONG) / MAP_WIDTH
+    delta_lat = (MAX_LAT - MIN_LAT) / MAP_WIDTH
     points = vtk.vtkPoints()
+    altitude_values = vtk.vtkIntArray()
 
-    # exploring the values
     for i, row in enumerate(data_map):
-        for j, alt in enumerate(row):
-            print("TODO")
+        for j, altitude in enumerate(row):
 
-    return data_map
+            # Calcul of latitude, longitude for each point
+            latitude = MIN_LAT + i * delta_lat
+            longitude = MIN_LONG + j * delta_long
+
+            points.InsertNextPoint(coordinate_earth(latitude, longitude, altitude))
+            altitude_values.InsertNextValue(altitude)
+
+    sgrid.SetPoints(points)
+    sgrid.SetDimensions([MAP_WIDTH, MAP_WIDTH, 1])
+    sgrid.GetPointData().SetScalars(altitude_values)
 
 
 def main():
     sgrid = vtk.vtkStructuredGrid()
-    data_map = generate_map(sgrid)
+
+    """
+    If we exec the program for the first time, we have to run some calculations
+    Otherwise we'll just read the file. So we have a sort of cache to speed up
+    """
+    if not os.path.isfile(VTK_FILENAME):
+        print('Initial read from data')
+        generate_map(sgrid)
+        writer_vtk(VTK_FILENAME, sgrid)
+
+    print('Read from vtk file')
+    reader = reader_vtk(VTK_FILENAME)
+
+    # Mapper
+    print('Setting the Mapper')
+    gridMapper = vtk.vtkDataSetMapper()
+    gridMapper.SetInputData(reader.GetOutput())
+
+    # Actor
+    print('Setting the Actor')
+    gridActor = vtk.vtkActor()
+    gridActor.SetMapper(gridMapper)
+
+    # Render
+    print('Setting the renderer')
+    renderer = vtk.vtkRenderer()
+    renderer.AddActor(gridActor)
+    renderer.SetBackground(0.5, 0.5, 0.5)
+
+    renWin = vtk.vtkRenderWindow()
+    renWin.AddRenderer(renderer)
+    renWin.SetSize(600, 860)
+    renWin.Render()
+
+    iren = vtk.vtkRenderWindowInteractor()
+    iren.SetRenderWindow(renWin)
+    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+
+    # Generates the .PNG file
+    # wif = vtk.vtkWindowToImageFilter()
+    # wif.SetInput(renWin)
+    # wif.Update()
+    #
+    # writer = vtk.vtkPNGWriter()
+    # writer.SetFileName("map_{}.png".format(SEA_ALT))
+    # writer.SetInputConnection(wif.GetOutputPort())
+    # writer.Write()
+
+    print("Finish")
+
+    # Interact with the data.
+    iren.Initialize()
+    iren.Start()
 
 
 main()
