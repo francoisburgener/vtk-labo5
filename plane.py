@@ -14,17 +14,32 @@ TEXTURE_IMG = "glider_map.jpg"
 VTK_MAP = "EarthEnv-DEM90_N60E010.bil"
 VTK_FILENAME = "plane.vtk"
 
-MIN_LAT = 0
-MAX_LAT = 0
-MIN_LONG = 0
-MAX_LONG = 0
+DEGREE = 5
+MIN_LAT = 60
+MIN_LONG = 10
+MAX_LAT = MIN_LAT + DEGREE
+MAX_LONG = MIN_LONG + DEGREE
 EARTH_RADIUS = 6371009
 MAP_WIDTH = 6000
-DEGREE = 5
 
 # Window parameters (with/height)
 WINDOW_WIDTH_SIZE = 1000
 WINDOW_HEIGTH_SIZE = 1000
+
+# https://gis.stackexchange.com/questions/78838/converting-projected-coordinates-to-lat-lon-using-python
+RT90 = pyproj.Proj(init='epsg:3857')
+GPS = pyproj.Proj(init='epsg:4326')
+
+
+def convert_rt90_to_gps_coordinate(x, y):
+    longitude, latitude = pyproj.transform(RT90, GPS, x, y)
+    return latitude, longitude
+
+
+TOP_LEFT = convert_rt90_to_gps_coordinate(1349340, 7022573)
+TOP_RIGHT = convert_rt90_to_gps_coordinate(1371573, 7022967)
+BOTTOM_LEFT = convert_rt90_to_gps_coordinate(1349602, 7005969)
+BOTTOM_RIGHT = convert_rt90_to_gps_coordinate(1371835, 7006362)
 
 
 def writer_vtk(filename, data):
@@ -74,6 +89,7 @@ def read_txt(filename):
 
         return size, coordinate
 
+
 def coordinate_earth(lat, lng, alt):
     """
     Shifts the altitude to match the earth's curvature
@@ -97,10 +113,17 @@ def generate_plane(coordinate):
 
 def generate_map(sgrid):
     data_map = np.fromfile(VTK_MAP, dtype=np.int16).reshape(MAP_WIDTH, MAP_WIDTH)
+
+    delta = DEGREE / MAP_WIDTH
+
+    
+
     points = vtk.vtkPoints()
 
-
-
+    # exploring the values
+    for i, row in enumerate(data_map):
+        for j, alt in enumerate(row):
+            print("TODO")
 
     return data_map
 
@@ -108,7 +131,6 @@ def generate_map(sgrid):
 def main():
     sgrid = vtk.vtkStructuredGrid()
     data_map = generate_map(sgrid)
-
 
 
 main()
