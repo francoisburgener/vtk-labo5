@@ -82,10 +82,10 @@ def read_txt(filename):
         coordinate = []
 
         for line in lines:
-            tmp = line.split(' ')
+            tmp = line.split()
             x = int(tmp[1])
             y = int(tmp[2])
-            z = int(tmp[3])
+            z = float(tmp[3])
 
             coordinate.append((x, y, z))
 
@@ -128,14 +128,14 @@ b = np.dot(coefficients_inv, py)
 
 # https://www.particleincell.com/2012/quad-interpolation/
 def get_texture_coord(lat, lon):
-    aa = a[3] * b[2] - a[2] * b[3];
-    bb = a[3] * b[0] - a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + lon * b[3] - lat * a[3];
-    cc = a[1] * b[0] - a[0] * b[1] + lon * b[1] - lat * a[1];
+    aa = a[3] * b[2] - a[2] * b[3]
+    bb = a[3] * b[0] - a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + lon * b[3] - lat * a[3]
+    cc = a[1] * b[0] - a[0] * b[1] + lon * b[1] - lat * a[1]
 
-    det = math.sqrt(bb * bb - 4 * aa * cc);
-    m = (-bb + det) / (2 * aa);
+    det = math.sqrt(bb * bb - 4 * aa * cc)
+    m = (-bb + det) / (2 * aa)
 
-    l = (lon - a[0] - a[2] * m) / (a[1] + a[3] * m);
+    l = (lon - a[0] - a[2] * m) / (a[1] + a[3] * m)
 
     return l, m
 
@@ -186,8 +186,48 @@ def generate_map(sgrid):
     sgrid.GetPointData().SetTCoords(coordinate_texture)
 
 
-def generate_plane(coordinate):
-    return 0
+def generate_plane():
+    size, coordinates = read_txt(VTK_PLANE_GPS)
+
+    plane_points = vtk.vtkPoints()
+    plane_lines = vtk.vtkPolyLine()
+    plane_lines.GetPointIds().SetNumberOfIds(len(coordinates))
+    scalar = vtk.vtkFloatArray()
+
+    previous_alt = coordinates[0][2]
+
+    for i, (x, y, alt) in enumerate(coordinates):
+        lat, long = convert_rt90_to_gps_coordinate(x, y)
+        plane_coord = coordinate_earth(lat, long, alt)
+
+        plane_points.InsertNextPoint(plane_coord)
+        plane_lines.GetPointIds().SetId(i, i)
+
+        # TODO calcule scalare delta_alt = previous_alt - alt
+        # scalar.InsertNextValue(delta_alt)
+        # previous_alt = alt
+        # TODO GET min max scalar
+
+    plane_cells = vtk.vtkCellArray()
+    plane_cells.InsertNextCell(plane_lines)
+
+    plane_data = vtk.vtkPolyData()
+    plane_data.SetPoints(plane_points)
+    plane_data.SetLines(plane_cells)
+    # TODO polydata.GetPointData().SetScalars(scalar)
+
+    plane_tube = vtk.vtkTubeFilter()
+    plane_tube.SetRadius(15)
+    plane_tube.SetInputData(plane_data)
+
+    plane_mapper = vtk.vtkPolyDataMapper()
+    plane_mapper.SetInputConnection(plane_tube.GetOutputPort())
+    # TODO mapper.SetScalarRange(min_scalar, max_scalar)
+
+    plane_actor = vtk.vtkActor()
+    plane_actor.SetMapper(plane_mapper)
+
+    return plane_actor
 
 
 def main():
@@ -218,12 +258,13 @@ def main():
     gridActor.SetTexture(texture)
 
     # Actor plane
-    # TODO
+    plane_actor = generate_plane()
 
     # Render
     print('Setting the renderer')
     renderer = vtk.vtkRenderer()
     renderer.AddActor(gridActor)
+    renderer.AddActor(plane_actor)
     renderer.SetBackground(0.5, 0.5, 0.5)
 
     renWin = vtk.vtkRenderWindow()
