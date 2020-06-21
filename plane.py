@@ -222,49 +222,50 @@ class MyInteractor(vtk.vtkInteractorStyleTrackballCamera):
         self.AddObserver("MouseMoveEvent", self.mouse_move_event)
         self.map_actor = map_actor
         self.text_actor = text_actor
+
         self.elevation_actor = vtk.vtkActor()
+        self.sphere = vtk.vtkSphere()
+        self.cutter = vtk.vtkCutter()
+        self.stripper = vtk.vtkStripper()
+        self. tube_filter = vtk.vtkTubeFilter()
+        self.mapper = vtk.vtkDataSetMapper()
+        self.picker = vtk.vtkPointPicker()
 
     def mouse_move_event(self, obj, event):
         pos = self.GetInteractor().GetEventPosition()
-        picker = vtk.vtkPointPicker()
-        picker.Pick(pos[0], pos[1], 0, self.GetDefaultRenderer())
-        actor_picked = picker.GetActor()
+        self.picker.Pick(pos[0], pos[1], 0, self.GetDefaultRenderer())
+        actor_picked = self.picker.GetActor()
 
         self.elevation_actor.GetProperty().SetColor(vtk.vtkNamedColors().GetColor3d("IndianRed"))
         self.GetDefaultRenderer().AddActor(self.elevation_actor)
 
         if actor_picked == self.map_actor:
-            altitude = picker.GetDataSet().GetPointData().GetScalars().GetValue(picker.GetPointId())
+            altitude = self.picker.GetDataSet().GetPointData().GetScalars().GetValue(self.picker.GetPointId())
             self.text_actor.SetInput(str(altitude) + "m")
             self.GetInteractor().Render()
 
             # We call the sphere (cutter/striper/tube_filter...)
-            self._elevation_cut(altitude, picker.GetDataSet())
+            self._elevation_cut(altitude, self.picker.GetDataSet())
 
         self.OnMouseMove()
         return
 
     def _elevation_cut(self, altitude, picker_dataset):
-        sphere = vtk.vtkSphere()
-        sphere.SetCenter(0, 0, 0)
-        sphere.SetRadius(EARTH_RADIUS + altitude)
+        self.sphere.SetCenter(0, 0, 0)
+        self.sphere.SetRadius(EARTH_RADIUS + altitude)
 
-        cutter = vtk.vtkCutter()
-        cutter.SetCutFunction(sphere)
-        cutter.SetInputData(picker_dataset)
+        self. cutter.SetCutFunction(self.sphere)
+        self. cutter.SetInputData(picker_dataset)
 
-        stripper = vtk.vtkStripper()
-        stripper.SetInputConnection(cutter.GetOutputPort())
+        self.stripper.SetInputConnection(self.cutter.GetOutputPort())
 
-        tube_filter = vtk.vtkTubeFilter()
-        tube_filter.SetRadius(32)
-        tube_filter.SetInputConnection(stripper.GetOutputPort())
+        self.tube_filter.SetRadius(32)
+        self.tube_filter.SetInputConnection(self.stripper.GetOutputPort())
 
-        mapper = vtk.vtkDataSetMapper()
-        mapper.ScalarVisibilityOff()
-        mapper.SetInputConnection(tube_filter.GetOutputPort())
+        self.mapper.ScalarVisibilityOff()
+        self.mapper.SetInputConnection(self.tube_filter.GetOutputPort())
 
-        self.elevation_actor.SetMapper(mapper)
+        self.elevation_actor.SetMapper(self.mapper)
 
 
 def main():
