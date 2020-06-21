@@ -20,6 +20,7 @@ MAX_LAT = MIN_LAT + DEGREE
 MAX_LONG = MIN_LONG + DEGREE
 EARTH_RADIUS = 6371009
 MAP_WIDTH = 6000
+delta_degree = DEGREE / MAP_WIDTH
 
 # Window parameters (with/height)
 WINDOW_WIDTH_SIZE = 1000
@@ -117,15 +118,8 @@ def get_texture():
     return texture
 
 
-def generate_map():
-    sgrid = vtk.vtkStructuredGrid()
-    points = vtk.vtkPoints()
-    coordinate_texture = vtk.vtkFloatArray()
-    coordinate_texture.SetNumberOfComponents(2)
-    scalars = vtk.vtkIntArray()
-
+def filter_data_map():
     data_map = np.fromfile(VTK_MAP, dtype=np.int16).reshape(MAP_WIDTH, MAP_WIDTH)
-    delta_degree = DEGREE / MAP_WIDTH
 
     top = min(TOP_LEFT[0], TOP_RIGHT[0])
     bottom = max(BOTTOM_RIGHT[0], BOTTOM_LEFT[0])
@@ -137,7 +131,18 @@ def generate_map():
     left_index = int((left - MIN_LONG) / delta_degree)
     right_index = int((right - MIN_LONG) / delta_degree)
 
-    data_map = data_map[top_index:bottom_index, left_index:right_index]
+    return data_map[top_index:bottom_index, left_index:right_index]
+
+def get_sgrid_map():
+    map_grid = vtk.vtkStructuredGrid()
+    points = vtk.vtkPoints()
+    coordinate_texture = vtk.vtkFloatArray()
+    coordinate_texture.SetNumberOfComponents(2)
+    scalars = vtk.vtkIntArray()
+
+    left = max(TOP_LEFT[1], BOTTOM_LEFT[1])
+    top = min(TOP_LEFT[0], TOP_RIGHT[0])
+    data_map = filter_data_map()
 
     for i, row in enumerate(data_map):
         for j, altitude in enumerate(row):
@@ -151,16 +156,22 @@ def generate_map():
 
             scalars.InsertNextValue(altitude)
 
-    sgrid.SetPoints(points)
+    map_grid.SetPoints(points)
 
     dim_y, dim_x = data_map.shape
-    sgrid.SetDimensions(dim_x, dim_y, 1)
-    sgrid.GetPointData().SetTCoords(coordinate_texture)
-    sgrid.GetPointData().SetScalars(scalars)
+    map_grid.SetDimensions(dim_x, dim_y, 1)
+    map_grid.GetPointData().SetTCoords(coordinate_texture)
+    map_grid.GetPointData().SetScalars(scalars)
+
+    return map_grid
+
+
+def generate_map():
+    map_grid = get_sgrid_map()
 
     # Mapper
     gridMapper = vtk.vtkDataSetMapper()
-    gridMapper.SetInputData(sgrid)
+    gridMapper.SetInputData(map_grid)
     gridMapper.ScalarVisibilityOff()
 
     # Actor
@@ -226,7 +237,7 @@ class MyInteractor(vtk.vtkInteractorStyleTrackballCamera):
         self.sphere = vtk.vtkSphere()
         self.cutter = vtk.vtkCutter()
         self.stripper = vtk.vtkStripper()
-        self. tube_filter = vtk.vtkTubeFilter()
+        self.tube_filter = vtk.vtkTubeFilter()
         self.mapper = vtk.vtkDataSetMapper()
         self.picker = vtk.vtkPointPicker()
 
@@ -253,8 +264,8 @@ class MyInteractor(vtk.vtkInteractorStyleTrackballCamera):
         self.sphere.SetCenter(0, 0, 0)
         self.sphere.SetRadius(EARTH_RADIUS + altitude)
 
-        self. cutter.SetCutFunction(self.sphere)
-        self. cutter.SetInputData(picker_dataset)
+        self.cutter.SetCutFunction(self.sphere)
+        self.cutter.SetInputData(picker_dataset)
 
         self.stripper.SetInputConnection(self.cutter.GetOutputPort())
 
@@ -315,5 +326,4 @@ def main():
 
 
 if __name__ == '__main__':
-
     main()
