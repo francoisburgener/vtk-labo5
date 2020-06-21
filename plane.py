@@ -79,7 +79,6 @@ def read_txt(filename):
         return size, coordinate
 
 
-# Initiate the constantes for the interpolation
 px = [BOTTOM_LEFT[1], BOTTOM_RIGHT[1], TOP_RIGHT[1], TOP_LEFT[1]]
 py = [BOTTOM_LEFT[0], BOTTOM_RIGHT[0], TOP_RIGHT[0], TOP_LEFT[0]]
 
@@ -138,7 +137,7 @@ def generate_map():
     left_index = int((left - MIN_LONG) / delta_degree)
     right_index = int((right - MIN_LONG) / delta_degree)
 
-    data_map = data_map[top_index:bottom_index + 1, left_index:right_index + 1]
+    data_map = data_map[top_index:bottom_index, left_index:right_index]
 
     for i, row in enumerate(data_map):
         for j, altitude in enumerate(row):
@@ -236,7 +235,7 @@ class MyInteractor(vtk.vtkInteractorStyleTrackballCamera):
         self.picker.Pick(pos[0], pos[1], 0, self.GetDefaultRenderer())
         actor_picked = self.picker.GetActor()
 
-        self.elevation_actor.GetProperty().SetColor(vtk.vtkNamedColors().GetColor3d("IndianRed"))
+        self.elevation_actor.GetProperty().SetColor(vtk.vtkNamedColors().GetColor3d("midnight_blue"))
         self.GetDefaultRenderer().AddActor(self.elevation_actor)
 
         if actor_picked == self.map_actor:
@@ -316,4 +315,5 @@ def main():
 
 
 if __name__ == '__main__':
+
     main()
