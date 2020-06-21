@@ -18,7 +18,7 @@ MIN_LAT = 60
 MIN_LONG = 10
 MAX_LAT = MIN_LAT + DEGREE
 MAX_LONG = MIN_LONG + DEGREE
-EARTH_RADIUS = 6371009
+R_EARTH  = 6371009
 MAP_WIDTH = 6000
 delta_degree = DEGREE / MAP_WIDTH
 
@@ -40,7 +40,7 @@ def coordinate_earth(lat, lng, alt):
     transform = vtk.vtkTransform()
     transform.RotateY(lng)
     transform.RotateX(-lat)
-    transform.Translate(0, 0, EARTH_RADIUS + alt)
+    transform.Translate(0, 0, R_EARTH  + alt)
 
     return transform.TransformPoint(0, 0, 0)
 
@@ -61,7 +61,7 @@ def read_txt(filename):
     """
     Reads the raw output data from a file.
     :param filename: the file name
-    :return: TODO
+    :return: size and list of swidich coordinate + altitude
     """
     with open(filename, 'r') as fd:
         size = fd.readline()
@@ -97,6 +97,11 @@ b = np.dot(coefficients_inv, py)
 
 # https://www.particleincell.com/2012/quad-interpolation/
 def get_texture_coord(lat, lon):
+    """
+    Get texture coordinate with quad interpolation
+    :param lat long: latitude and longitude
+    :return: transform coordinate
+    """
     aa = a[3] * b[2] - a[2] * b[3]
     bb = a[3] * b[0] - a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + lon * b[3] - lat * a[3]
     cc = a[1] * b[0] - a[0] * b[1] + lon * b[1] - lat * a[1]
@@ -111,6 +116,9 @@ def get_texture_coord(lat, lon):
 
 # https://vtk.org/Wiki/VTK/Examples/Cxx/Visualization/TextureMapPlane
 def get_texture():
+    """
+    Get texture from jpeg image
+    """
     reader = vtk.vtkJPEGReader()
     reader.SetFileName(TEXTURE_IMG)
     texture = vtk.vtkTexture()
@@ -119,6 +127,9 @@ def get_texture():
 
 
 def filter_data_map():
+    """
+    Filter data from image corner (TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT)
+    """
     data_map = np.fromfile(VTK_MAP, dtype=np.int16).reshape(MAP_WIDTH, MAP_WIDTH)
 
     top = min(TOP_LEFT[0], TOP_RIGHT[0])
@@ -134,6 +145,9 @@ def filter_data_map():
     return data_map[top_index:bottom_index, left_index:right_index]
 
 def get_sgrid_map():
+    """
+    Create the structured grid of the map
+    """
     map_grid = vtk.vtkStructuredGrid()
     points = vtk.vtkPoints()
     coordinate_texture = vtk.vtkFloatArray()
@@ -167,6 +181,10 @@ def get_sgrid_map():
 
 
 def generate_map():
+    """
+    Generate the map
+    :return: the actor of the map
+    """
     map_grid = get_sgrid_map()
 
     # Mapper
@@ -185,6 +203,10 @@ def generate_map():
 
 
 def generate_plane_path():
+    """
+    Generate the plane path
+    :return: the actor of the plane path
+    """
     size, coordinates = read_txt(VTK_PLANE_GPS)
 
     plane_points = vtk.vtkPoints()
@@ -262,7 +284,7 @@ class MyInteractor(vtk.vtkInteractorStyleTrackballCamera):
 
     def _elevation_cut(self, altitude, picker_dataset):
         self.sphere.SetCenter(0, 0, 0)
-        self.sphere.SetRadius(EARTH_RADIUS + altitude)
+        self.sphere.SetRadius(R_EARTH  + altitude)
 
         self.cutter.SetCutFunction(self.sphere)
         self.cutter.SetInputData(picker_dataset)
@@ -300,7 +322,8 @@ def main():
     renderer.AddActor(text_actor)
     renderer.SetBackground(0, 0, 0)
 
-    # Custom interactor
+    # My interactor
+    print('Setting my interactor')
     style = MyInteractor(map_actor, text_actor)
     style.SetDefaultRenderer(renderer)
 
