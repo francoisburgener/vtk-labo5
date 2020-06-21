@@ -25,6 +25,7 @@ MAP_WIDTH = 6000
 WINDOW_WIDTH_SIZE = 1000
 WINDOW_HEIGTH_SIZE = 1000
 
+
 def coordinate_earth(lat, lng, alt):
     """
     Shifts the altitude to match the earth's curvature
@@ -173,7 +174,7 @@ def generate_map():
     return gridActor
 
 
-def generate_plane():
+def generate_plane_path():
     size, coordinates = read_txt(VTK_PLANE_GPS)
 
     plane_points = vtk.vtkPoints()
@@ -216,11 +217,12 @@ def generate_plane():
     return plane_actor
 
 
-class CustomInteractor(vtk.vtkInteractorStyleTrackballCamera):
+class MyInteractor(vtk.vtkInteractorStyleTrackballCamera):
     def __init__(self, map_actor, text_actor):
         self.AddObserver("MouseMoveEvent", self.mouse_move_event)
         self.map_actor = map_actor
         self.text_actor = text_actor
+        self.elevation_actor = vtk.vtkActor()
 
     def mouse_move_event(self, obj, event):
         pos = self.GetInteractor().GetEventPosition()
@@ -228,13 +230,41 @@ class CustomInteractor(vtk.vtkInteractorStyleTrackballCamera):
         picker.Pick(pos[0], pos[1], 0, self.GetDefaultRenderer())
         actor_picked = picker.GetActor()
 
+        self.elevation_actor.GetProperty().SetColor(vtk.vtkNamedColors().GetColor3d("IndianRed"))
+        self.GetDefaultRenderer().AddActor(self.elevation_actor)
+
         if actor_picked == self.map_actor:
             altitude = picker.GetDataSet().GetPointData().GetScalars().GetValue(picker.GetPointId())
             self.text_actor.SetInput(str(altitude) + "m")
             self.GetInteractor().Render()
 
+            # We call the sphere (cutter/striper/tube_filter...)
+            self._elevation_cut(altitude, picker.GetDataSet())
+
         self.OnMouseMove()
         return
+
+    def _elevation_cut(self, altitude, picker_dataset):
+        sphere = vtk.vtkSphere()
+        sphere.SetCenter(0, 0, 0)
+        sphere.SetRadius(EARTH_RADIUS + altitude)
+
+        cutter = vtk.vtkCutter()
+        cutter.SetCutFunction(sphere)
+        cutter.SetInputData(picker_dataset)
+
+        stripper = vtk.vtkStripper()
+        stripper.SetInputConnection(cutter.GetOutputPort())
+
+        tube_filter = vtk.vtkTubeFilter()
+        tube_filter.SetRadius(32)
+        tube_filter.SetInputConnection(stripper.GetOutputPort())
+
+        mapper = vtk.vtkDataSetMapper()
+        mapper.ScalarVisibilityOff()
+        mapper.SetInputConnection(tube_filter.GetOutputPort())
+
+        self.elevation_actor.SetMapper(mapper)
 
 
 def main():
@@ -244,7 +274,7 @@ def main():
 
     # Actor plane
     print("Genarate plane actor...")
-    plane_actor = generate_plane()
+    plane_actor = generate_plane_path()
 
     # Text actor
     text_actor = vtk.vtkTextActor()
@@ -260,7 +290,7 @@ def main():
     renderer.SetBackground(0, 0, 0)
 
     # Custom interactor
-    style = CustomInteractor(map_actor, text_actor)
+    style = MyInteractor(map_actor, text_actor)
     style.SetDefaultRenderer(renderer)
 
     renWin = vtk.vtkRenderWindow()
@@ -282,6 +312,7 @@ def main():
     iren.Initialize()
     renWin.Render()
     iren.Start()
+
 
 if __name__ == '__main__':
     main()
