@@ -217,23 +217,24 @@ def generate_plane():
 
 
 class CustomInteractor(vtk.vtkInteractorStyleTrackballCamera):
-    def __init__(self, map_actor, text_actor, parent=None):
+    def __init__(self, map_actor, text_actor):
         self.AddObserver("MouseMoveEvent", self.mouse_move_event)
         self.map_actor = map_actor
         self.text_actor = text_actor
-        self.level_cutter = None
 
     def mouse_move_event(self, obj, event):
+        pos = self.GetInteractor().GetEventPosition()
         picker = vtk.vtkPointPicker()
-        picker.Pick(800, 800, 0, self.GetDefaultRenderer())
+        picker.Pick(pos[0], pos[1], 0, self.GetDefaultRenderer())
         actor_picked = picker.GetActor()
 
         if actor_picked == self.map_actor:
-            print("picker id : ", picker.GetPointId())
-            print("Get value : ", picker.GetDataSet().GetPointData().GetScalars().GetValue(0))
             altitude = picker.GetDataSet().GetPointData().GetScalars().GetValue(picker.GetPointId())
             self.text_actor.SetInput(str(altitude) + "m")
             self.GetInteractor().Render()
+
+        self.OnMouseMove()
+        return
 
 
 def main():
@@ -250,9 +251,6 @@ def main():
     text_actor.GetTextProperty().SetColor(1, 1, 1)
     text_actor.SetInput("0 m")
 
-    text_widget = vtk.vtkTextWidget()
-    text_widget.SetTextActor(text_actor)
-
     # Render
     print('Setting the renderer')
     renderer = vtk.vtkRenderer()
@@ -268,17 +266,22 @@ def main():
     renWin = vtk.vtkRenderWindow()
     renWin.AddRenderer(renderer)
     renWin.SetSize(WINDOW_WIDTH_SIZE, WINDOW_HEIGTH_SIZE)
-    renWin.Render()
 
     print("Finish")
 
     iren = vtk.vtkRenderWindowInteractor()
     iren.SetRenderWindow(renWin)
-    iren.Initialize()
-
     iren.SetInteractorStyle(style)
+
+    text_widget = vtk.vtkTextWidget()
+    text_widget.SetTextActor(text_actor)
+    text_widget.SetInteractor(iren)
+    text_widget.SelectableOff()
     text_widget.On()
 
+    iren.Initialize()
+    renWin.Render()
     iren.Start()
 
-main()
+if __name__ == '__main__':
+    main()
