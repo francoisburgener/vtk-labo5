@@ -122,6 +122,7 @@ def generate_map():
     points = vtk.vtkPoints()
     coordinate_texture = vtk.vtkFloatArray()
     coordinate_texture.SetNumberOfComponents(2)
+    scalars = vtk.vtkIntArray()
 
     data_map = np.fromfile(VTK_MAP, dtype=np.int16).reshape(MAP_WIDTH, MAP_WIDTH)
     delta_degree = DEGREE / MAP_WIDTH
@@ -148,15 +149,19 @@ def generate_map():
             l, m = get_texture_coord(latitude, longitude)
             coordinate_texture.InsertNextTuple((l, m))
 
+            scalars.InsertNextValue(altitude)
+
     sgrid.SetPoints(points)
 
     dim_y, dim_x = data_map.shape
     sgrid.SetDimensions(dim_x, dim_y, 1)
     sgrid.GetPointData().SetTCoords(coordinate_texture)
+    sgrid.GetPointData().SetScalars(scalars)
 
     # Mapper
     gridMapper = vtk.vtkDataSetMapper()
     gridMapper.SetInputData(sgrid)
+    gridMapper.ScalarVisibilityOff()
 
     # Actor
     gridActor = vtk.vtkActor()
@@ -210,6 +215,27 @@ def generate_plane():
 
     return plane_actor
 
+
+class CustomInteractor(vtk.vtkInteractorStyleTrackballCamera):
+    def __init__(self, map_actor, text_actor, parent=None):
+        self.AddObserver("MouseMoveEvent", self.mouse_move_event)
+        self.map_actor = map_actor
+        self.text_actor = text_actor
+        self.level_cutter = None
+
+    def mouse_move_event(self, obj, event):
+        picker = vtk.vtkPointPicker()
+        picker.Pick(800, 800, 0, self.GetDefaultRenderer())
+        actor_picked = picker.GetActor()
+
+        if actor_picked == self.map_actor:
+            print("picker id : ", picker.GetPointId())
+            print("Get value : ", picker.GetDataSet().GetPointData().GetScalars().GetValue(0))
+            altitude = picker.GetDataSet().GetPointData().GetScalars().GetValue(picker.GetPointId())
+            self.text_actor.SetInput(str(altitude) + "m")
+            self.GetInteractor().Render()
+
+
 def main():
     # Map actor
     print("Genarate map actor...")
@@ -219,28 +245,40 @@ def main():
     print("Genarate plane actor...")
     plane_actor = generate_plane()
 
+    # Text actor
+    text_actor = vtk.vtkTextActor()
+    text_actor.GetTextProperty().SetColor(1, 1, 1)
+    text_actor.SetInput("0 m")
+
+    text_widget = vtk.vtkTextWidget()
+    text_widget.SetTextActor(text_actor)
+
     # Render
     print('Setting the renderer')
     renderer = vtk.vtkRenderer()
     renderer.AddActor(map_actor)
     renderer.AddActor(plane_actor)
-    renderer.AddActor(a)
+    renderer.AddActor(text_actor)
     renderer.SetBackground(0, 0, 0)
+
+    # Custom interactor
+    style = CustomInteractor(map_actor, text_actor)
+    style.SetDefaultRenderer(renderer)
 
     renWin = vtk.vtkRenderWindow()
     renWin.AddRenderer(renderer)
     renWin.SetSize(WINDOW_WIDTH_SIZE, WINDOW_HEIGTH_SIZE)
     renWin.Render()
 
-    iren = vtk.vtkRenderWindowInteractor()
-    iren.SetRenderWindow(renWin)
-    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
-
     print("Finish")
 
-    # Interact with the data.
+    iren = vtk.vtkRenderWindowInteractor()
+    iren.SetRenderWindow(renWin)
     iren.Initialize()
-    iren.Start()
 
+    iren.SetInteractorStyle(style)
+    text_widget.On()
+
+    iren.Start()
 
 main()
